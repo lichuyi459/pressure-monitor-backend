@@ -16,10 +16,17 @@ router.post('/data', async (req, res) => {
       });
     }
 
+    // 关键修复: 确保 sensor2 (真空压强) 存储为负数
+    // 如果 ESP32 发送的是正数,自动转为负数
+    let processedSensor2 = parseFloat(sensor2);
+    if (processedSensor2 > 0) {
+      processedSensor2 = -processedSensor2;
+    }
+
     // 保存到数据库
     const data = await PressureModel.create(
-      sensor1, 
-      sensor2, 
+      parseFloat(sensor1), 
+      processedSensor2, 
       timestamp ? new Date(timestamp) : null
     );
 
@@ -49,11 +56,11 @@ router.get('/data', async (req, res) => {
 
     const data = await PressureModel.getDataByTimeRange(minutes);
 
-    // 转换数据格式
+    // 转换数据格式,确保 sensor2 为负数
     const formattedData = data.map(item => ({
       id: item.id,
       sensor1: parseFloat(item.sensor1),
-      sensor2: parseFloat(item.sensor2),
+      sensor2: parseFloat(item.sensor2) > 0 ? -parseFloat(item.sensor2) : parseFloat(item.sensor2),
       timestamp: item.timestamp
     }));
 
@@ -89,7 +96,7 @@ router.get('/data/latest', async (req, res) => {
       data: {
         id: data.id,
         sensor1: parseFloat(data.sensor1),
-        sensor2: parseFloat(data.sensor2),
+        sensor2: parseFloat(data.sensor2) > 0 ? -parseFloat(data.sensor2) : parseFloat(data.sensor2),
         timestamp: data.timestamp
       }
     });
@@ -110,6 +117,11 @@ router.get('/statistics', async (req, res) => {
 
     const stats = await PressureModel.getStatistics(minutes);
 
+    // 确保 sensor2 的统计数据为负数
+    const sensor2Max = parseFloat(stats.sensor2_max);
+    const sensor2Min = parseFloat(stats.sensor2_min);
+    const sensor2Avg = parseFloat(stats.sensor2_avg);
+
     res.json({ 
       success: true, 
       data: {
@@ -119,9 +131,9 @@ router.get('/statistics', async (req, res) => {
           avg: parseFloat(stats.sensor1_avg) || 0
         },
         sensor2: {
-          max: parseFloat(stats.sensor2_max) || 0,
-          min: parseFloat(stats.sensor2_min) || 0,
-          avg: parseFloat(stats.sensor2_avg) || 0
+          max: sensor2Max > 0 ? -sensor2Max : sensor2Max || 0,
+          min: sensor2Min > 0 ? -sensor2Min : sensor2Min || 0,
+          avg: sensor2Avg > 0 ? -sensor2Avg : sensor2Avg || 0
         },
         count: parseInt(stats.count)
       }
